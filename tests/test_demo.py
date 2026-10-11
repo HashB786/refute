@@ -136,3 +136,63 @@ def test_a_recorded_answer_is_found_again_from_the_statement_it_was_made_for():
     assert dropped == 0
     assert [sample.input_text for sample in kept] == ["3 11\n1 5 10\n", "4 7\n1 2 3 5\n"]
     assert all(sample.source == "model_extracted" for sample in kept)
+
+
+def test_the_recorded_tooling_still_passes_the_checks_it_has_to_pass():
+    """The recording is committed, so a stricter check could silently break it.
+
+    `refute demo` re-runs every tooling check against the scripts it reads
+    back from examples/cache. If a check gets stricter and a recorded script
+    no longer passes, the demo tries to repair it, misses the cache and stops.
+    Nothing else in this suite would notice, because the other end-to-end
+    tests use canned tooling of their own.
+    """
+    from refute.models import Limits, Sample
+    from refute.sandbox import workspace, write_script
+    from refute.synth import (
+        Calibration,
+        Smoke,
+        extract_code,
+        generator_check,
+        oracle_check,
+        validator_check,
+    )
+
+    recorded = {}
+    for path in cli.DEMO_CACHE.glob("*.json"):
+        entry = json.loads(path.read_text(encoding="utf-8"))
+        recorded[entry["purpose"]] = entry["response"]
+
+    samples = []
+    for name in ("1", "2"):
+        directory = cli.DEMO_PROBLEM / "samples"
+        samples.append(
+            Sample(
+                name,
+                (directory / (name + ".in")).read_text(encoding="utf-8"),
+                (directory / (name + ".out")).read_text(encoding="utf-8"),
+                "samples_dir",
+            )
+        )
+
+    limits = Limits()
+    with workspace() as directory:
+        for purpose in ("oracle_a", "oracle_b"):
+            script = write_script(
+                directory, purpose + ".py", extract_code(recorded[purpose])
+            )
+            assert oracle_check(samples, limits, None)(script) == "", purpose
+
+        calibration = Calibration()
+        validator = write_script(
+            directory, "validator.py", extract_code(recorded["validator"])
+        )
+        assert validator_check(samples, limits, calibration)(validator) == ""
+        assert not calibration.weak
+
+        smoke = Smoke()
+        generator = write_script(
+            directory, "gen.py", extract_code(recorded["generator"])
+        )
+        assert generator_check(validator, limits, smoke)(generator) == ""
+        assert smoke.accepted == smoke.runs

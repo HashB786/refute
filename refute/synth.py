@@ -486,15 +486,22 @@ def generator_check(
             if problem:
                 return problem
 
+        # The same arguments twice, for every seed at the largest size. One
+        # repeat would be a coin toss: an unseeded generator can match itself
+        # by luck, and then nothing downstream would be reproducible.
         biggest = SMOKE_SIZES[-1]
-        repeat, problem = one(path, SMOKE_SEEDS[0], biggest, MODES[1].value)
-        if problem:
-            return problem
-        if repeat != printed[(SMOKE_SEEDS[0], biggest, MODES[1].value)]:
-            return (
-                "it printed two different inputs for the same SEED. Use "
-                "random.Random(SEED) as the only source of randomness."
-            )
+        for seed in SMOKE_SEEDS:
+            again, problem = one(path, seed, biggest, MODES[1].value)
+            if problem:
+                return problem
+            if again != printed[(seed, biggest, MODES[1].value)]:
+                return (
+                    "it printed two different inputs for SEED "
+                    + str(seed)
+                    + " run twice. Use random.Random(SEED) as the only source "
+                    "of randomness, and do not call random.seed or the "
+                    "module-level random functions."
+                )
 
         floor = max(2, smoke.runs // 3)
         if smoke.distinct < floor:

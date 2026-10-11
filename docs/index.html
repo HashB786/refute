@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Refute</title>
+<style>
+:root{
+  color-scheme: light dark;
+  --paper:#fcfcfa; --grid:#d9e0f0; --ink:#33363c; --pencil:#5f636b; --blue:#1d3ba6; --red:#cf222e;
+  --serif: Charter, "Bitstream Charter", "Sitka Text", Cambria, "Iowan Old Style", Georgia, serif;
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --cell: 28px;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --paper:#1f2b29; --grid:#2f403d; --ink:#e8e7df; --pencil:#a3b0ab; --blue:#98b6ff; --red:#ff9488; }
+}
+*{box-sizing:border-box}
+html{background:var(--paper);-webkit-text-size-adjust:100%}
+body{margin:0;color:var(--ink);font:18px/28px var(--serif);text-rendering:optimizeLegibility}
+main{max-width:672px;margin:0 auto;padding:56px 20px 112px}
+h1{font-weight:400;font-size:clamp(30px,6.2vw,48px);line-height:1.12;letter-spacing:-.012em;margin:0 0 20px;text-wrap:balance}
+h2{font-size:22px;line-height:28px;font-weight:700;margin:56px 0 14px}
+p{margin:0 0 14px;max-width:34em}
+.lede{font-size:20px;margin-bottom:28px}
+.note,.by,footer{color:var(--pencil)}
+.note{font-size:16px;line-height:24px}
+.by{font-size:16px;margin-bottom:6px}
+.model{font-style:italic}
+a{color:inherit}
+code{font:15px var(--mono)}
+pre.cmd{margin:-6px 0 0;overflow-x:auto}
+.cmd code{user-select:all}
+
+/* the squared sheet: one character per square */
+.sheet{margin:0 0 14px;padding:var(--cell);border:1px solid var(--grid);overflow-x:auto;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:var(--cell) var(--cell)}
+.sheet:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.row{display:grid;grid-template-columns:calc(var(--cell)*var(--lab,4)) max-content;align-items:start}
+.label{font:italic 16px/var(--cell) var(--serif);color:var(--pencil)}
+.hero .label{font-size:18px}
+.cells{position:relative;font:calc(var(--cell)*1.08)/var(--cell) var(--mono);letter-spacing:calc(var(--cell) - 1ch);white-space:pre}
+.line{height:var(--cell);padding-left:calc((var(--cell) - 1ch)/2)}
+.gap{height:var(--cell)}
+.got .cells{color:var(--blue)}
+.hero{--cell:36px}
+.steps{--cell:20px;--lab:3}
+.steps .cells{font-size:calc(var(--cell)*.95)}
+.steps s{color:var(--pencil);text-decoration-line:line-through;text-decoration-thickness:2px}
+.nl{color:var(--pencil)}
+.circle{position:absolute;left:calc((var(--x) - .4)*var(--cell));top:calc((var(--y) - .27)*var(--cell));
+  width:calc((var(--w) + .8)*var(--cell));height:calc(var(--cell)*1.55);overflow:visible;pointer-events:none}
+.circle path{fill:none;stroke:var(--red);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+
+/* one bar per test */
+.strip{display:block;width:100%;height:auto;margin:6px 0 14px}
+.strip rect{fill:var(--pencil)}
+.strip .skip{fill:none;stroke:var(--pencil);stroke-width:1}
+.strip .fail{fill:var(--red)}
+.strip line{stroke:var(--pencil);stroke-width:1}
+
+.facts{margin:0 0 14px;max-width:34em}
+.facts div{display:flex;align-items:baseline;gap:8px}
+.facts dt{display:flex;flex:1 1 auto;align-items:baseline;gap:8px}
+.facts dt::after{content:"";flex:1 1 16px;border-bottom:1px dotted var(--pencil);transform:translateY(-5px)}
+.facts dd{margin:0;flex:none;font-variant-numeric:tabular-nums}
+
+.diff{font:15px/22px var(--mono);margin:0 0 14px;white-space:pre;overflow-x:auto}
+.diff .del{color:var(--pencil)}
+.diff .del s{text-decoration-thickness:1.5px}
+.diff .add{color:var(--blue)}
+ul{padding-left:1.15em;margin:0 0 14px}
+li{margin-bottom:6px;max-width:34em}
+footer{margin-top:56px;font-size:15px;line-height:24px;max-width:34em}
+
+@media (max-width:560px){
+  body{font-size:17px}
+  main{padding-top:36px}
+  .sheet{--cell:22px;--lab:3}
+  .hero{--cell:26px}
+  .steps{--cell:16px;--lab:4}
+  .label,.hero .label{font-size:15px}
+  .facts div{display:block;margin-bottom:8px}
+  .facts dt{display:block}
+  .facts dt::after{content:none}
+  .facts dd{color:var(--pencil)}
+}
+
+/* a trust line that failed */
+.facts .weak{color:var(--red)}
+/* the results table on the landing page */
+table{border-collapse:collapse;margin:0 0 14px;font-size:16px;line-height:24px}
+caption{text-align:left;color:var(--pencil);font-size:16px;padding-bottom:6px}
+th,td{padding:4px 18px 4px 0;text-align:left;border-bottom:1px solid var(--grid)}
+th{font-weight:700}
+.n{text-align:right;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<main>
+<h1>The smallest input that proves your solution wrong.</h1>
+<p>Refute looks for the smallest input your program gets wrong. A language model writes the throwaway test tooling for a problem: two independent reference solutions, an input validator and an input generator.</p>
+<p>Running the code decides, not the model. Every piece of tooling has to prove itself by running before anything it says is believed, and a failure is only reported when both reference solutions agree on the answer.</p>
+
+<p>greedy.py prints 5. The right answer is 2.</p>
+<figure class="sheet hero" tabindex="0" aria-label="The smallest failing input and the two outputs">
+  <div class="row"><span class="label">input</span><div class="cells"><div class="line">3 10</div><div class="line">1 5 6</div></div></div>
+  <div class="gap"></div>
+  <div class="row"><span class="label">expected</span><div class="cells"><div class="line">2</div></div></div>
+  <div class="row got"><span class="label">got</span><div class="cells"><div class="line">5</div><svg class="circle" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true" focusable="false" style="--x:0;--y:0;--w:1"><path d="M8 27C6 10 28 3 52 4C80 5 97 14 94 30C91 47 66 57 42 56C18 55 3 44 5 28C6 17 18 9 33 7"/></svg></div></div>
+</figure>
+<p class="note">From the recorded demo in this repository, which replays the model output and runs every program for real.</p>
+
+<h2>Install and run</h2>
+<pre><code>git clone &lt;this repository&gt;
+cd refute
+python -m venv .venv
+.venv/bin/pip install -e .
+.venv/bin/refute demo</code></pre>
+<p>That needs no key and no network. To run it on your own solution, put a model endpoint in a .env file and use:</p>
+<pre><code>refute run statement.md solution.py</code></pre>
+<p class="note">The demo above repeats its own finding with <code>python examples/coin-change/greedy.py &amp;lt; refute-out/counterexample.in</code>.</p>
+
+<h2>How the model is checked</h2>
+<ul>
+<li>Two reference solutions, by different methods. Both have to reproduce every example in the statement, and a failure counts only when they agree with each other.</li>
+<li>A validator that has to accept every example and reject deliberately broken copies of them: one token short, one token too many, one number out of range.</li>
+<li>A generator that has to produce valid input at fifteen combinations of size and mode, give the same input for the same seed, and give different inputs for different seeds.</li>
+<li>A guard that parses anything the model writes and refuses it if it imports outside a short list or reaches for open, exec, eval or dunder attributes.</li>
+<li>A suggested fix is called verified only once it passes the examples, the counterexample and two hundred tests on seeds the first run never used.</li>
+<li>The diagnosis is the one thing nothing can check, so it is labelled as the model's words and left unchecked.</li>
+</ul>
+
+<h2>Results</h2>
+<table>
+<caption>Planted bugs found, per problem. Agreement is how often the two reference solutions printed the same answer when both were run.</caption>
+<tr><th>problem</th><th class="n">bugs found</th><th class="n">tests to first failure</th><th class="n">smallest input</th><th>oracles agree</th></tr>
+<tr><td>distinct-stretch</td><td class="n">3 of 3</td><td class="n">96</td><td class="n">1</td><td>38 of 38</td></tr>
+<tr><td>fewest-hops</td><td class="n">3 of 3</td><td class="n">64</td><td class="n">4</td><td>62 of 62</td></tr>
+<tr><td>max-subarray</td><td class="n">3 of 3</td><td class="n">32</td><td class="n">3</td><td>22 of 22</td></tr>
+<tr><td>pick-talks</td><td class="n">2 of 3</td><td class="n">152</td><td class="n">6</td><td>63 of 63</td></tr>
+<tr><td>ship-the-boxes</td><td class="n">3 of 3</td><td class="n">64</td><td class="n">4</td><td>60 of 60</td></tr>
+<tr><td>split-the-load</td><td class="n">3 of 3</td><td class="n">16</td><td class="n">2</td><td>61 of 61</td></tr>
+<tr><th>all six</th><th class="n">17 of 18</th><th class="n">64</th><th class="n">3</th><th></th></tr>
+</table>
+<p>Refute was handed each statement and each planted bug and nothing else. It never saw the reference solution that the benchmark keeps to check its own bugs with. Every bug reproduces the examples in its statement, so none of them can be caught by reading the statement. Tests to first failure and smallest input are medians over the bugs that were found; the smallest input is counted in whitespace-separated tokens.</p>
+<p>The budget was 300 tests or 45 seconds a bug, with 15 seconds to shrink, and the tooling for a problem was written once and reused for every bug of that problem: 32 model calls for all 18 bugs.</p>
+<p>1 bug was missed: pick-talks / by length. bench/RESULTS.md lists every bug, found or missed, with the reason it was missed.</p>
+
+<h2>Limits</h2>
+<ul>
+<li>No counterexample found is not the same as correct. A run that finds nothing reports how many tests it ran, how large the inputs got and how often the two reference solutions agreed, and says so.</li>
+<li>A counterexample is a fact, because your program and both references were run on it. The explanation beside it is not.</li>
+<li>The benchmark below marks its own homework: the bugs were written by the same agent that built Refute, not collected from real submissions.</li>
+<li>Refute runs code it did not write. The guard and the sandbox catch mistakes, not attacks, so use the Dockerfile with --network none for anything you do not trust.</li>
+<li>For practice, not for live contests.</li>
+</ul>
+
+<h2>More</h2>
+<ul>
+<li>The sample report above in full: <a href="sample-report.html">sample-report.html</a></li>
+<li>Every bug the benchmark planted, found or missed: <a href="../bench/RESULTS.md">bench/RESULTS.md</a></li>
+<li>The write-up: <a href="devpost.md">docs/devpost.md</a></li>
+<li>The source, the six benchmark problems and the recorded demo are in this repository.</li>
+</ul>
+
+<footer>Refute is for practice and for learning, not for live contests. MIT licence.</footer>
+</main>
+</body>
+</html>

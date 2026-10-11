@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Refute: greedy.py</title>
+<style>
+:root{
+  color-scheme: light dark;
+  --paper:#fcfcfa; --grid:#d9e0f0; --ink:#33363c; --pencil:#5f636b; --blue:#1d3ba6; --red:#cf222e;
+  --serif: Charter, "Bitstream Charter", "Sitka Text", Cambria, "Iowan Old Style", Georgia, serif;
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --cell: 28px;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --paper:#1f2b29; --grid:#2f403d; --ink:#e8e7df; --pencil:#a3b0ab; --blue:#98b6ff; --red:#ff9488; }
+}
+*{box-sizing:border-box}
+html{background:var(--paper);-webkit-text-size-adjust:100%}
+body{margin:0;color:var(--ink);font:18px/28px var(--serif);text-rendering:optimizeLegibility}
+main{max-width:672px;margin:0 auto;padding:56px 20px 112px}
+h1{font-weight:400;font-size:clamp(30px,6.2vw,48px);line-height:1.12;letter-spacing:-.012em;margin:0 0 20px;text-wrap:balance}
+h2{font-size:22px;line-height:28px;font-weight:700;margin:56px 0 14px}
+p{margin:0 0 14px;max-width:34em}
+.lede{font-size:20px;margin-bottom:28px}
+.note,.by,footer{color:var(--pencil)}
+.note{font-size:16px;line-height:24px}
+.by{font-size:16px;margin-bottom:6px}
+.model{font-style:italic}
+a{color:inherit}
+code{font:15px var(--mono)}
+pre.cmd{margin:-6px 0 0;overflow-x:auto}
+.cmd code{user-select:all}
+
+/* the squared sheet: one character per square */
+.sheet{margin:0 0 14px;padding:var(--cell);border:1px solid var(--grid);overflow-x:auto;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:var(--cell) var(--cell)}
+.sheet:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.row{display:grid;grid-template-columns:calc(var(--cell)*var(--lab,4)) max-content;align-items:start}
+.label{font:italic 16px/var(--cell) var(--serif);color:var(--pencil)}
+.hero .label{font-size:18px}
+.cells{position:relative;font:calc(var(--cell)*1.08)/var(--cell) var(--mono);letter-spacing:calc(var(--cell) - 1ch);white-space:pre}
+.line{height:var(--cell);padding-left:calc((var(--cell) - 1ch)/2)}
+.gap{height:var(--cell)}
+.got .cells{color:var(--blue)}
+.hero{--cell:36px}
+.steps{--cell:20px;--lab:3}
+.steps .cells{font-size:calc(var(--cell)*.95)}
+.steps s{color:var(--pencil);text-decoration-line:line-through;text-decoration-thickness:2px}
+.nl{color:var(--pencil)}
+.circle{position:absolute;left:calc((var(--x) - .4)*var(--cell));top:calc((var(--y) - .27)*var(--cell));
+  width:calc((var(--w) + .8)*var(--cell));height:calc(var(--cell)*1.55);overflow:visible;pointer-events:none}
+.circle path{fill:none;stroke:var(--red);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+
+/* one bar per test */
+.strip{display:block;width:100%;height:auto;margin:6px 0 14px}
+.strip rect{fill:var(--pencil)}
+.strip .skip{fill:none;stroke:var(--pencil);stroke-width:1}
+.strip .fail{fill:var(--red)}
+.strip line{stroke:var(--pencil);stroke-width:1}
+
+.facts{margin:0 0 14px;max-width:34em}
+.facts div{display:flex;align-items:baseline;gap:8px}
+.facts dt{display:flex;flex:1 1 auto;align-items:baseline;gap:8px}
+.facts dt::after{content:"";flex:1 1 16px;border-bottom:1px dotted var(--pencil);transform:translateY(-5px)}
+.facts dd{margin:0;flex:none;font-variant-numeric:tabular-nums}
+
+.diff{font:15px/22px var(--mono);margin:0 0 14px;white-space:pre;overflow-x:auto}
+.diff .del{color:var(--pencil)}
+.diff .del s{text-decoration-thickness:1.5px}
+.diff .add{color:var(--blue)}
+ul{padding-left:1.15em;margin:0 0 14px}
+li{margin-bottom:6px;max-width:34em}
+footer{margin-top:56px;font-size:15px;line-height:24px;max-width:34em}
+
+@media (max-width:560px){
+  body{font-size:17px}
+  main{padding-top:36px}
+  .sheet{--cell:22px;--lab:3}
+  .hero{--cell:26px}
+  .steps{--cell:16px;--lab:4}
+  .label,.hero .label{font-size:15px}
+  .facts div{display:block;margin-bottom:8px}
+  .facts dt{display:block}
+  .facts dt::after{content:none}
+  .facts dd{color:var(--pencil)}
+}
+
+/* a trust line that failed */
+.facts .weak{color:var(--red)}
+</style>
+</head>
+<body>
+<main>
+<h1>greedy.py prints 5. The right answer is 2.</h1>
+<p class="lede">This is the smallest failing input Refute found, after 128 tests. Two independent reference solutions both print 2.</p>
+
+<figure class="sheet hero" tabindex="0" aria-label="The smallest failing input and the two outputs">
+  <div class="row"><span class="label">input</span><div class="cells"><div class="line">3 10</div><div class="line">1 5 6</div></div></div>
+  <div class="gap"></div>
+  <div class="row"><span class="label">expected</span><div class="cells"><div class="line">2</div></div></div>
+  <div class="row got"><span class="label">got</span><div class="cells"><div class="line">5</div><svg class="circle" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true" focusable="false" style="--x:0;--y:0;--w:1"><path d="M8 27C6 10 28 3 52 4C80 5 97 14 94 30C91 47 66 57 42 56C18 55 3 44 5 28C6 17 18 9 33 7"/></svg></div></div>
+</figure>
+<p class="note cmd">Run it yourself:</p>
+<pre class="cmd"><code>python examples/coin-change/greedy.py &lt; refute-out/counterexample.in</code></pre>
+
+<h2>What was tested</h2>
+<svg class="strip" viewBox="0 0 640 64" role="img" aria-label="128 tests in the order they ran. Taller bars are larger inputs. The red bar is the failure."><rect x="0" y="50.0" width="3" height="8.0"/><rect x="5" y="50.0" width="3" height="8.0"/><rect x="10" y="50.0" width="3" height="8.0"/><rect x="15" y="50.0" width="3" height="8.0"/><rect x="20" y="50.0" width="3" height="8.0"/><rect x="25" y="50.0" width="3" height="8.0"/><rect x="30" y="50.0" width="3" height="8.0"/><rect x="35" y="50.0" width="3" height="8.0"/><rect x="40" y="50.0" width="3" height="8.0"/><rect x="45" y="50.0" width="3" height="8.0"/><rect x="50" y="50.0" width="3" height="8.0"/><rect x="55" y="50.0" width="3" height="8.0"/><rect x="60" y="50.0" width="3" height="8.0"/><rect x="65" y="50.0" width="3" height="8.0"/><rect x="70" y="50.0" width="3" height="8.0"/><rect x="75" y="50.0" width="3" height="8.0"/><rect x="80" y="50.0" width="3" height="8.0"/><rect x="85" y="50.0" width="3" height="8.0"/><rect x="90" y="50.0" width="3" height="8.0"/><rect x="95" y="50.0" width="3" height="8.0"/><rect x="100" y="50.0" width="3" height="8.0"/><rect x="105" y="50.0" width="3" height="8.0"/><rect x="110" y="50.0" width="3" height="8.0"/><rect x="115" y="50.0" width="3" height="8.0"/><rect x="120" y="39.1" width="3" height="18.9"/><rect x="125" y="39.1" width="3" height="18.9"/><rect x="130" y="39.1" width="3" height="18.9"/><rect x="135" y="39.1" width="3" height="18.9"/><rect x="140" y="39.1" width="3" height="18.9"/><rect x="145" y="39.1" width="3" height="18.9"/><rect x="150" y="39.1" width="3" height="18.9"/><rect x="155" y="39.1" width="3" height="18.9"/><rect x="160" y="39.1" width="3" height="18.9"/><rect x="165" y="39.1" width="3" height="18.9"/><rect x="170" y="39.1" width="3" height="18.9"/><rect x="175" y="39.1" width="3" height="18.9"/><rect x="180" y="39.1" width="3" height="18.9"/><rect x="185" y="39.1" width="3" height="18.9"/><rect x="190" y="39.1" width="3" height="18.9"/><rect x="195" y="39.1" width="3" height="18.9"/><rect x="200" y="39.1" width="3" height="18.9"/><rect x="205" y="39.1" width="3" height="18.9"/><rect x="210" y="39.1" width="3" height="18.9"/><rect x="215" y="39.1" width="3" height="18.9"/><rect x="220" y="39.1" width="3" height="18.9"/><rect x="225" y="39.1" width="3" height="18.9"/><rect x="230" y="39.1" width="3" height="18.9"/><rect x="235" y="39.1" width="3" height="18.9"/><rect x="240" y="32.8" width="3" height="25.2"/><rect x="245" y="32.8" width="3" height="25.2"/><rect x="250" y="32.8" width="3" height="25.2"/><rect x="255" y="32.8" width="3" height="25.2"/><rect x="260" y="32.8" width="3" height="25.2"/><rect x="265" y="32.8" width="3" height="25.2"/><rect x="270" y="32.8" width="3" height="25.2"/><rect x="275" y="32.8" width="3" height="25.2"/><rect x="280" y="32.8" width="3" height="25.2"/><rect x="285" y="32.8" width="3" height="25.2"/><rect x="290" y="32.8" width="3" height="25.2"/><rect x="295" y="32.8" width="3" height="25.2"/><rect x="300" y="32.8" width="3" height="25.2"/><rect x="305" y="32.8" width="3" height="25.2"/><rect x="310" y="32.8" width="3" height="25.2"/><rect x="315" y="32.8" width="3" height="25.2"/><rect x="320" y="32.8" width="3" height="25.2"/><rect x="325" y="32.8" width="3" height="25.2"/><rect x="330" y="32.8" width="3" height="25.2"/><rect x="335" y="32.8" width="3" height="25.2"/><rect x="340" y="32.8" width="3" height="25.2"/><rect x="345" y="32.8" width="3" height="25.2"/><rect x="350" y="32.8" width="3" height="25.2"/><rect x="355" y="32.8" width="3" height="25.2"/><rect x="360" y="28.3" width="3" height="29.7"/><rect x="365" y="28.3" width="3" height="29.7"/><rect x="370" y="28.3" width="3" height="29.7"/><rect x="375" y="28.3" width="3" height="29.7"/><rect x="380" y="28.3" width="3" height="29.7"/><rect x="385" y="28.3" width="3" height="29.7"/><rect x="390" y="28.3" width="3" height="29.7"/><rect x="395" y="28.3" width="3" height="29.7"/><rect x="400" y="28.3" width="3" height="29.7"/><rect x="405" y="28.3" width="3" height="29.7"/><rect x="410" y="28.3" width="3" height="29.7"/><rect x="415" y="28.3" width="3" height="29.7"/><rect x="420" y="28.3" width="3" height="29.7"/><rect x="425" y="28.3" width="3" height="29.7"/><rect x="430" y="28.3" width="3" height="29.7"/><rect x="435" y="28.3" width="3" height="29.7"/><rect x="440" y="28.3" width="3" height="29.7"/><rect x="445" y="28.3" width="3" height="29.7"/><rect x="450" y="28.3" width="3" height="29.7"/><rect x="455" y="28.3" width="3" height="29.7"/><rect x="460" y="28.3" width="3" height="29.7"/><rect x="465" y="28.3" width="3" height="29.7"/><rect x="470" y="28.3" width="3" height="29.7"/><rect x="475" y="28.3" width="3" height="29.7"/><rect x="480" y="24.8" width="3" height="33.2"/><rect x="485" y="24.8" width="3" height="33.2"/><rect x="490" y="24.8" width="3" height="33.2"/><rect x="495" y="24.8" width="3" height="33.2"/><rect x="500" y="24.8" width="3" height="33.2"/><rect x="505" y="24.8" width="3" height="33.2"/><rect x="510" y="24.8" width="3" height="33.2"/><rect x="515" y="24.8" width="3" height="33.2"/><rect x="520" y="24.8" width="3" height="33.2"/><rect x="525" y="24.8" width="3" height="33.2"/><rect x="530" y="24.8" width="3" height="33.2"/><rect x="535" y="24.8" width="3" height="33.2"/><rect x="540" y="24.8" width="3" height="33.2"/><rect x="545" y="24.8" width="3" height="33.2"/><rect x="550" y="24.8" width="3" height="33.2"/><rect x="555" y="24.8" width="3" height="33.2"/><rect x="560" y="24.8" width="3" height="33.2"/><rect x="565" y="24.8" width="3" height="33.2"/><rect x="570" y="24.8" width="3" height="33.2"/><rect x="575" y="24.8" width="3" height="33.2"/><rect x="580" y="24.8" width="3" height="33.2"/><rect x="585" y="24.8" width="3" height="33.2"/><rect x="590" y="24.8" width="3" height="33.2"/><rect x="595" y="24.8" width="3" height="33.2"/><rect x="600" y="21.9" width="3" height="36.1"/><rect x="605" y="21.9" width="3" height="36.1"/><rect class="fail" x="610" y="21.9" width="3" height="36.1"/><rect x="615" y="21.9" width="3" height="36.1"/><rect x="620" y="21.9" width="3" height="36.1"/><rect x="625" y="21.9" width="3" height="36.1"/><rect x="630" y="21.9" width="3" height="36.1"/><rect x="635" y="21.9" width="3" height="36.1"/><line x1="0" y1="60" x2="640" y2="60"/></svg>
+<p>128 tests ran before the first confirmed failure, on inputs of up to 5 numbers. Each bar is one test in the order it ran, and taller bars are larger inputs. The red bar is the failure.</p>
+
+<h2>Why you can trust this</h2>
+<dl class="facts">
+  <div><dt>Reference solution A reproduces the samples</dt><dd>2 of 2</dd></div>
+  <div><dt>Reference solution B reproduces the samples</dt><dd>2 of 2</dd></div>
+  <div><dt>The two reference solutions agree</dt><dd>13 of 13 compared</dd></div>
+  <div><dt>The validator accepts the samples</dt><dd>2 of 2</dd></div>
+  <div><dt>The validator rejects broken copies of them</dt><dd>2 of 2</dd></div>
+  <div><dt>Generated inputs the validator accepts</dt><dd>75 of 75</dd></div>
+</dl>
+<p class="note">A failure counts only when both reference solutions print the same answer. The model wrote the reference solutions and the validator, so each was checked by running it.</p>
+
+<h2>What the model said</h2>
+<p class="by">Written by the model. Refute has not checked it.</p>
+<p class="model">The program uses a greedy algorithm that always takes as many of the current largest coin as possible. For the coin set {1,5,6} and amount 10, it first takes one 6‑coin, leaving 4, then fills the remainder with four 1‑coins, totaling five coins, while the optimal solution is two 5‑coins. The mistake is assuming the greedy choice (largest fitting coin) yields an optimal solution for arbitrary coin systems. The correct approach is to compute the minimum number of coins with dynamic programming (or BFS) over amounts up to a.</p>
+
+<h2>A suggested fix</h2>
+<p>Verified: it passes the 2 samples, the counterexample and 200 new random tests.</p>
+<pre class="diff" aria-label="Suggested change to the solution"><span class="del">-<s># Pay the amount by always taking the largest coin that still fits.</s>
+-<s># This is the solution most people write first, and it is wrong.</s></span>
+<span class="del">-</span>
+<span class="add">+    if not data:
++        return</span>
+<span class="del">-    <s>coins = [int(token) for token in data[2 : 2 + n]]</s></span>
+<span class="add">+    coins = list(map(int, data[2:2 + n]))</span>
+<span class="del">-    <s>used = 0</s>
+-    <s>for coin in sorted(coins, reverse=True):</s>
+-    <s>    used += amount // coin</s>
+-    <s>    amount %= coin</s>
+-    <s>print(used)</s></span>
+<span class="add">+    # DP for minimum coins: dp[x] = min coins to make x
++    INF = 10 ** 9
++    dp = [INF] * (amount + 1)
++    dp[0] = 0
++    for coin in coins:
++        for x in range(coin, amount + 1):
++            if dp[x - coin] + 1 &lt; dp[x]:
++                dp[x] = dp[x - coin] + 1</span>
+<span class="add">+    print(dp[amount])</span>
+<span class="del">-<s>main()</s></span>
+<span class="add">+if __name__ == "__main__":
++    main()</span></pre>
+
+<h2>What this run does not show</h2>
+<ul>
+<li>The counterexample is a fact: your program and both reference solutions were run on it. The explanation above is not.</li>
+<li>Random testing can miss rare failures. Inputs of the largest sizes were only sampled.</li>
+<li>A fix that passed 200 new random tests is evidence, not a proof that it is correct.</li>
+</ul>
+
+<footer>Refute 0.1.0 ran on 11 October 2026 at 20:35 and took 166 seconds. Model: openai/gpt-oss-120b, 6 calls, all from cache.</footer>
+</main>
+</body>
+</html>

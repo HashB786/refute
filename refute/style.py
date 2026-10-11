@@ -135,3 +135,16 @@ WEAK_BLOCK = """
 """
 
 CSS = REFERENCE + WEAK_BLOCK
+
+#: Extra rules for docs/index.html, which the report itself does not need.
+#: The landing page carries a table of benchmark results and the report has
+#: no table in it. DESIGN.md asks for a plain one: no stripes, no rounded
+#: corners, and numbers right-aligned in tabular figures.
+LANDING = """
+/* the results table on the landing page */
+table{border-collapse:collapse;margin:0 0 14px;font-size:16px;line-height:24px}
+caption{text-align:left;color:var(--pencil);font-size:16px;padding-bottom:6px}
+th,td{padding:4px 18px 4px 0;text-align:left;border-bottom:1px solid var(--grid)}
+th{font-weight:700}
+.n{text-align:right;font-variant-numeric:tabular-nums}
+"""
