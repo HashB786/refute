@@ -344,7 +344,8 @@ print(" ".join("1" for _ in range(n)))
         validator = write_script(directory, "validator.py", GOOD_VALIDATOR)
         generator = write_script(directory, "gen.py", unseeded)
         problem = generator_check(validator, Limits(), smoke)(generator)
-    assert "same SEED" in problem or "different inputs" in problem
+    assert "run twice" in problem
+    assert "random.Random(SEED)" in problem
 
 
 def test_a_generator_that_ignores_its_arguments_is_refused_as_not_varied():

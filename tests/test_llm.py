@@ -621,3 +621,25 @@ def test_use_cache_false_still_reads_the_cache_when_offline(tmp_path):
         ),
     )
     assert client.complete("samples", "p", use_cache=False).text == "recorded"
+
+
+def test_a_cached_call_still_reports_what_it_cost(tmp_path):
+    # A replayed run should not claim its tooling was free: the usage stored
+    # with the recording is what the call cost when it was made.
+    client = Client(settings(), cache_dir=tmp_path)
+    client.cache.put(
+        "oracle_a",
+        "p",
+        LLMResponse(
+            text="code",
+            purpose="oracle_a",
+            model="m",
+            provider="openai",
+            usage=Usage(prompt_tokens=400, completion_tokens=120),
+        ),
+    )
+    response = client.complete("oracle_a", "p")
+    assert response.cached
+    assert client.cached == 1
+    assert client.calls == 0
+    assert client.tokens == 520

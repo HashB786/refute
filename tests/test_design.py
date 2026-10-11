@@ -244,9 +244,9 @@ def test_the_strip_never_draws_more_than_a_hundred_and_sixty_bars():
 # wording
 
 
-def _report_strings() -> list[str]:
-    """Every string literal in refute/report.py, which is where the page's prose lives."""
-    tree = ast.parse((ROOT / "refute" / "report.py").read_text(encoding="utf-8"))
+def _strings_in(module: str) -> list[str]:
+    """Every string literal in a module, which is where its prose lives."""
+    tree = ast.parse((ROOT / "refute" / module).read_text(encoding="utf-8"))
     return [
         node.value
         for node in ast.walk(tree)
@@ -264,7 +264,12 @@ def _wording_sources() -> dict[str, str]:
     index = ROOT / "docs" / "index.html"
     if index.is_file():
         out["docs/index.html"] = index.read_text(encoding="utf-8")
-    out["refute/report.py strings"] = "\n".join(_report_strings())
+    out["refute/report.py strings"] = "\n".join(_strings_in("report.py"))
+    # bench.py writes bench/RESULTS.md, so its prose is held to the same rules.
+    out["refute/bench.py strings"] = "\n".join(_strings_in("bench.py"))
+    results = ROOT / "bench" / "RESULTS.md"
+    if results.is_file():
+        out["bench/RESULTS.md"] = results.read_text(encoding="utf-8")
     return out
 
 

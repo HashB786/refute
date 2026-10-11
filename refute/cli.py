@@ -21,6 +21,7 @@ from rich.console import Console
 from rich.text import Text
 
 from . import __version__, sandbox
+from .bench import load_problems, run_bench
 from .fix import explain as explain_failure
 from .llm import CacheMiss, Client, LLMError, Settings, build_client
 from .models import Budget, Counterexample, Limits, Report, Trust, Verdict, out_paths
@@ -36,6 +37,9 @@ from .synth import SynthError, Tooling, load_samples, synthesize
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 DEMO_PROBLEM = EXAMPLES / "coin-change"
 DEMO_CACHE = EXAMPLES / "cache"
+
+#: Where the benchmark's problems and its write-up live.
+BENCH = Path(__file__).resolve().parent.parent / "bench"
 
 PING_PROMPT = "Reply with exactly: refute ping ok"
 LABEL = 10
@@ -615,6 +619,69 @@ def demo(console: Console) -> int:
     )
 
 
+def bench(args: argparse.Namespace, console: Console) -> int:
+    """Run Refute against every planted bug and write up what happened."""
+    root = BENCH
+    if not (root / "problems").is_dir():
+        row(console, "bench", "no problems in " + (root / "problems").as_posix())
+        return 1
+    try:
+        client = build_client(cache_dir=args.cache_dir, offline=args.offline)
+    except LLMError as exc:
+        row(console, "config", str(exc))
+        return 1
+
+    problems = load_problems(root)
+    planted = sum(len(problem.bugs) for problem in problems)
+    console.print(
+        "refute "
+        + __version__
+        + "  bench  "
+        + plural(len(problems), "problem")
+        + ", "
+        + plural(planted, "bug")
+    )
+    console.print("")
+
+    status = Status(console)
+    started = time.monotonic()
+    record = run_bench(
+        root,
+        client,
+        resume=args.resume,
+        on_step=lambda slug, message: status.update(slug, message),
+    )
+    status.clear()
+
+    for problem in problems:
+        pairs = [pair for pair in record.pairs if pair.problem == problem.slug]
+        if not pairs:
+            continue
+        found = sum(1 for pair in pairs if pair.found)
+        row(
+            console,
+            problem.slug,
+            str(found) + " of " + str(len(pairs)) + " found",
+        )
+    console.print("")
+    total = len(record.pairs)
+    found = sum(1 for pair in record.pairs if pair.found)
+    console.print("Found " + str(found) + " of " + str(total) + " planted bugs.")
+    console.print("")
+    hero_row(console, "results", Text(short_path(root / "RESULTS.md")))
+    hero_row(console, "record", Text(short_path(root / "results.json")))
+    console.print("")
+    row(
+        console,
+        "time",
+        format(time.monotonic() - started, ".0f")
+        + " s, "
+        + plural(client.calls + client.cached, "model call"),
+        style=DIM,
+    )
+    return 0 if found == total else 2
+
+
 def settings_line(settings: Settings) -> str:
     """The configuration in one line, with no key in it."""
     return (
@@ -660,8 +727,14 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--offline", action="store_true")
 
     sub.add_parser("demo", help="replay the recorded example offline (phase 2)")
-    bench_parser = sub.add_parser("bench", help="run the benchmark (phase 3)")
-    bench_parser.add_argument("--resume", action="store_true")
+    bench_parser = sub.add_parser(
+        "bench", help="run Refute against every planted bug in bench/problems"
+    )
+    bench_parser.add_argument(
+        "--resume", action="store_true", help="skip the pairs already recorded"
+    )
+    bench_parser.add_argument("--cache-dir", type=Path, default=None)
+    bench_parser.add_argument("--offline", action="store_true")
     return parser
 
 
@@ -686,8 +759,7 @@ def main(argv: list[str] | None = None) -> int:
         return demo(console)
 
     if args.command == "bench":
-        row(console, args.command, "this command arrives in a later phase")
-        return 1
+        return bench(args, console)
 
     parser.print_help()
     return 1

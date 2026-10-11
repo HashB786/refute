@@ -456,6 +456,10 @@ class Client:
             cached = self.cache.get(purpose, prompt)
             if cached is not None:
                 self.cached += 1
+                # The usage stored with a recording is what the call really
+                # cost when it was made. Counting it keeps a replayed run from
+                # reporting that its tooling was written out of thin air.
+                self.tokens += cached.usage.total_tokens
                 self._answered_by = cached.model or self._answered_by
                 return cached
         if self.offline:

@@ -89,9 +89,14 @@ def test_main_prints_help_and_fails_when_no_command_is_given(capsys):
     assert "usage" in capsys.readouterr().out.lower()
 
 
-def test_the_benchmark_is_declared_but_not_implemented_yet(capsys):
-    assert main(["bench"]) == 1
-    assert "later phase" in capsys.readouterr().out
+def test_every_command_in_the_help_is_implemented(capsys):
+    # Nothing is left declared but unbuilt now.
+    help_text = build_parser().format_help()
+    for command in ("ping", "run", "demo", "bench"):
+        assert command in help_text
+    assert "later phase" not in help_text
+    assert main([]) == 1
+    assert "later phase" not in capsys.readouterr().out
 
 
 def test_the_parser_accepts_the_documented_run_options():
