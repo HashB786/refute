@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from refute.models import Budget, Counterexample, Limits, Verdict
+from refute.models import Budget, Counterexample, Limits, RunResult, Verdict
 from refute.sandbox import command_for, workspace, write_script
 from refute.shrink import (
     candidates,
@@ -23,21 +23,26 @@ from refute.shrink import (
     value_moves,
     weight,
 )
-from refute.stress import Judgement, Tools, run_stress
+from refute.stress import Tools, run_stress
 
 
 @dataclass
 class Predicate:
-    """A stand-in for Tools whose judge is one Python function.
+    """A stand-in for Tools whose target is one Python function.
 
-    The real judge runs four subprocesses. For studying the moves themselves,
-    a predicate says exactly the same thing in one line.
+    The real thing runs up to four subprocesses per candidate. For studying
+    the moves themselves, a predicate says the same in one line: both
+    references always answer "ok", and the target fails on the inputs the
+    predicate picks out, in whichever way `verdict` says it fails.
     """
 
     fails: Callable[[str], bool]
     valid: Callable[[str], bool] = lambda text: True
     verdict: Verdict = Verdict.WA
     judged: list[str] = field(default_factory=list)
+    oracle_a: Path = Path("oracle_a.py")
+    oracle_b: Path | None = Path("oracle_b.py")
+    float_tol: float | None = None
 
     def validate(self, text: str) -> bool:
         return bool(text.strip()) and self.valid(text)
@@ -45,11 +50,27 @@ class Predicate:
     def generate(self, seed: int, size: int, mode: str) -> str:
         return ""
 
-    def judge(self, text: str, always_check_b: bool = False) -> Judgement:
+    def reference(self, text: str, path: Path) -> tuple[str, bool]:
+        return "ok", True
+
+    def run_target(self, text: str) -> RunResult:
         self.judged.append(text)
-        if self.fails(text):
-            return Judgement(self.verdict, expected="ok", actual="wrong")
-        return Judgement(Verdict.PASS, expected="ok", actual="ok")
+        try:
+            failed = self.fails(text)
+        except Exception:
+            # The target now runs before the validator, so it sees candidates
+            # it cannot parse. A real target is a subprocess: those come back
+            # as a crash, not as an exception in the shrinker.
+            return RunResult(exit_code=1, stdout="", stderr="unreadable", duration=0.0)
+        if not failed:
+            return RunResult(exit_code=0, stdout="ok", stderr="", duration=0.0)
+        if self.verdict is Verdict.RE:
+            return RunResult(exit_code=1, stdout="", stderr="boom", duration=0.0)
+        if self.verdict is Verdict.TLE:
+            return RunResult(
+                exit_code=0, stdout="", stderr="", duration=0.0, timed_out=True
+            )
+        return RunResult(exit_code=0, stdout="wrong", stderr="", duration=0.0)
 
 
 def start(text: str, verdict: Verdict = Verdict.WA) -> Counterexample:
@@ -133,8 +154,9 @@ def test_a_number_that_counts_nothing_gets_no_compound_move():
 def test_line_token_and_value_moves_do_what_they_say():
     assert "1 2\n" in [text for _, text in line_moves("3 4\n1 2\n")]
     assert "3\n" in [text for _, text in token_moves("3 4\n")]
-    lowered = [text for _, text in value_moves("8\n")]
-    assert "0\n" in lowered and "1\n" in lowered and "4\n" in lowered and "7\n" in lowered
+    # Three values per number and nothing in between: halves and decrements
+    # are gone, because the binary search covers that ground in fewer probes.
+    assert [text for _, text in value_moves("8\n")] == ["0\n", "1\n", "-1\n"]
 
 
 def test_a_single_line_input_has_no_line_move():
@@ -157,6 +179,20 @@ def test_a_candidate_that_fails_differently_is_not_accepted():
     assert still_fails(tools, "1\n", Verdict.RE.value) is not None
 
 
+def test_only_the_target_runs_when_its_behaviour_changed():
+    # The verdict being shrunk is a crash and this candidate does not crash,
+    # so the validator and the two references have nothing to add.
+    asked: list[str] = []
+
+    def valid(text: str) -> bool:
+        asked.append(text)
+        return True
+
+    tools = Predicate(fails=lambda text: False, valid=valid, verdict=Verdict.RE)
+    assert still_fails(tools, "1\n", Verdict.RE.value) is None
+    assert asked == []
+
+
 def test_an_empty_candidate_is_never_accepted():
     tools = Predicate(fails=lambda text: True)
     assert still_fails(tools, "   \n", Verdict.WA.value) is None
@@ -172,6 +208,20 @@ def test_it_shrinks_to_the_smallest_input_the_predicate_still_fails_on():
     outcome = shrink(tools, start("9 40 7 12\n"), Budget(shrink_seconds=20))
     assert outcome.counterexample.input_text.split() == ["5"]
     assert outcome.stable
+
+
+def test_a_number_is_binary_searched_down_to_the_smallest_failing_value():
+    # Fails whenever any number is 6 or more, starting far above it. Six is
+    # the answer, and the cheap way there is to close the interval rather
+    # than step down.
+    tools = Predicate(fails=lambda text: any(int(t) >= 6 for t in text.split()))
+    outcome = shrink(tools, start("900 123 77\n"), Budget(shrink_seconds=20))
+    assert outcome.counterexample.input_text.split() == ["6"]
+    assert outcome.stable
+    assert any("binary search" in step.action for step in outcome.steps)
+    # Halves and decrements need hundreds of evaluations to walk 900 down to
+    # 6, and on a real problem every evaluation is up to four processes.
+    assert len(tools.judged) < 150
 
 
 def test_it_keeps_a_counted_input_valid_while_shrinking_it():

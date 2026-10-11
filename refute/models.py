@@ -225,7 +225,7 @@ class Budget:
 
     max_tests: int = 600
     max_seconds: float = 90.0
-    shrink_seconds: float = 30.0
+    shrink_seconds: float = 90.0
     fix_stress_tests: int = 200
 
 
