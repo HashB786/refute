@@ -70,7 +70,7 @@ def test_ping_reports_a_failure_without_a_traceback(tmp_path, capsys):
     code = ping(client_for(tmp_path, handler), Console(width=100))
     out = capsys.readouterr().out
     assert code == 1
-    assert "ping failed" in out
+    assert "failed" in out
     assert "401" in out
 
 

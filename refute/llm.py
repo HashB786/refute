@@ -325,7 +325,8 @@ class Client:
     def _client(self) -> httpx.Client:
         return httpx.Client(timeout=120.0, transport=self._transport)
 
-    def _endpoint(self) -> str:
+    def endpoint(self) -> str:
+        """The URL a call goes to. Printed by `refute ping`."""
         if self.settings.provider == "anthropic":
             return self.settings.base_url + "/v1/messages"
         return self.settings.base_url + "/chat/completions"
@@ -474,7 +475,7 @@ class Client:
             try:
                 with self._client() as client:
                     http = client.post(
-                        self._endpoint(),
+                        self.endpoint(),
                         headers=self._headers(),
                         json=self._payload(prompt, system),
                     )
