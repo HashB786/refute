@@ -15,6 +15,7 @@ import difflib
 import html
 import json
 import math
+import os.path
 import re
 import time
 from dataclasses import asdict
@@ -501,11 +502,26 @@ def trust_note(report: Report) -> str:
 # the suggested fix
 
 
+def common_indent(lines: list[str]) -> str:
+    """The whitespace every line of a block begins with."""
+    indents = [
+        line[: len(line) - len(line.lstrip())] for line in lines if line.strip()
+    ]
+    if not indents:
+        return ""
+    return os.path.commonprefix(indents)
+
+
 def diff(before: str, after: str) -> str:
     """Removed lines struck in pencil, added lines in blue.
 
-    Leading whitespace is left outside the strike, because a line drawn
-    through an indent reads as a line through nothing.
+    The strike starts at the same column on every line of a block: the
+    indentation the whole block shares sits outside it, and anything deeper
+    sits inside. That is how the reference draws it, and it gives the struck
+    block one straight left edge instead of a ragged one. Striking each
+    line's own indent instead would draw a line through empty space, and
+    striking from a fixed column would cut words in half on code that starts
+    at the left margin.
     """
     old = before.splitlines()
     new = after.splitlines()
@@ -515,14 +531,16 @@ def diff(before: str, after: str) -> str:
         if tag == "equal":
             continue
         if tag in ("delete", "replace"):
+            gone = old[start:end]
+            gutter = common_indent(gone)
             removed = []
-            for line in old[start:end]:
-                indent = line[: len(line) - len(line.lstrip())]
-                rest = line[len(indent) :]
-                piece = "-" + esc(indent)
-                if rest:
-                    piece += "<s>" + esc(rest) + "</s>"
-                removed.append(piece)
+            for line in gone:
+                if not line.strip():
+                    removed.append("-" + esc(line))
+                    continue
+                removed.append(
+                    "-" + esc(gutter) + "<s>" + esc(line[len(gutter) :]) + "</s>"
+                )
             blocks.append('<span class="del">' + "\n".join(removed) + "</span>")
         if tag in ("insert", "replace"):
             added = ["+" + esc(line) for line in new[other_start:other_end]]

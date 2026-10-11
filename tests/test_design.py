@@ -16,7 +16,7 @@ import pytest
 
 from refute import report as page
 from refute import style
-from refute.models import TestRecord, Verdict
+from refute.models import ShrinkStep, TestRecord, Verdict
 
 from .test_report import not_refuted, records, refuted
 
@@ -328,3 +328,133 @@ def test_the_page_is_well_formed(name):
     parser.feed(html(name))
     assert parser.problems == [], name
     assert parser.open == [], name + " left " + str(parser.open) + " open"
+
+
+# ---------------------------------------------------------------------------
+# the markup is the reference's: only data and sentences may differ
+
+
+REFERENCE_PAGE = (ROOT / "docs" / "reference" / "report.html").read_text(encoding="utf-8")
+
+
+def _class_names(markup: str) -> set[str]:
+    out: set[str] = set()
+    for value in re.findall(r'class="([^"]*)"', markup):
+        out.update(value.split())
+    return out
+
+
+def _signatures(markup: str) -> dict[str, set[tuple[str, ...]]]:
+    """For each tag and class, the attribute names it carries, in source order."""
+    out: dict[str, set[tuple[str, ...]]] = {}
+    for match in re.finditer(r'<([a-z0-9]+)((?:\s+[a-zA-Z-]+="[^"]*")*)\s*/?>', markup):
+        tag, attrs = match.group(1), match.group(2)
+        names = tuple(re.findall(r"([a-zA-Z-]+)=", attrs))
+        found = re.search(r'class="([^"]*)"', attrs)
+        key = tag + ("." + found.group(1).replace(" ", ".") if found else "")
+        out.setdefault(key, set()).add(names)
+    return out
+
+
+def test_no_class_name_is_invented():
+    mine = _class_names(html("refuted")) | _class_names(html("not refuted"))
+    theirs = _class_names(REFERENCE_PAGE)
+    # "weak" is the one addition, for a trust line that failed. The reference
+    # has no failing example, so it shows no such line.
+    assert mine - theirs == {"weak"}
+    assert theirs - mine == set()
+
+
+def test_every_class_in_the_stylesheet_is_one_the_page_uses():
+    defined = set(re.findall(r"\.([a-zA-Z][\w-]*)", style.CSS))
+    used = _class_names(html("refuted")) | _class_names(html("not refuted"))
+    assert defined == used
+
+
+def test_attribute_names_and_their_order_match_the_reference():
+    mine = _signatures(html("refuted") + html("not refuted"))
+    theirs = _signatures(REFERENCE_PAGE)
+    for key, signature in sorted(theirs.items()):
+        assert key in mine, "the page no longer has " + key
+        assert mine[key] == signature, key
+    for key in sorted(set(mine) - set(theirs)):
+        assert key == "dd.weak", "the page invented " + key
+
+
+def test_the_staircase_reproduces_the_reference_row_for_row():
+    """Fed the reference's own steps, the staircase must redraw its figure.
+
+    This is what pins the striking rule down: a number is struck when the
+    next step removed or changed it, and nothing else is.
+    """
+    figure = re.search(
+        r'<figure class="sheet steps".*?</figure>', REFERENCE_PAGE, re.DOTALL
+    ).group(0)
+    rows = re.findall(r'<div class="line">(.*?)</div>', figure)
+
+    recovered = []
+    for row in rows:
+        plain = re.sub(r"</?s>", "", row).replace('<span class="nl">/</span>', "\n")
+        recovered.append(
+            "\n".join(" ".join(part.split()) for part in plain.split("\n")) + "\n"
+        )
+
+    steps = [
+        ShrinkStep(index, "lowered a number", text, len(text.split()))
+        for index, text in enumerate(recovered)
+    ]
+    steps[0].action = "found"
+    drawn = page.staircase(steps)
+    assert re.findall(r'<div class="line">(.*?)</div>', drawn) == rows
+    assert re.findall(r'<span class="label">(.*?)</span>', drawn) == re.findall(
+        r'<span class="label">(.*?)</span>', figure
+    )
+
+
+def test_the_diff_gutter_matches_the_reference():
+    """The strike starts at one column for the whole block, as the reference draws it."""
+    before = (
+        "def solve(coins, amount):\n"
+        "    coins.sort(reverse=True)\n"
+        "    count = 0\n"
+        "    for c in coins:\n"
+        "        count += amount // c\n"
+        "        amount %= c\n"
+        "    return count\n"
+    )
+    after = (
+        "def solve(coins, amount):\n"
+        "    best = [0] + [10 ** 9] * amount\n"
+        "    return best[amount]\n"
+    )
+    drawn = page.diff(before, after)
+    for line in drawn.splitlines():
+        if line.startswith("-") or '<span class="del">-' in line:
+            body = line.split('<span class="del">')[-1]
+            assert body.startswith("-    <s>"), body
+    # The indentation the block shares sits outside the strike; anything
+    # deeper sits inside it.
+    assert "-    <s>coins.sort(reverse=True)</s>" in drawn
+    assert "-    <s>    count += amount // c</s>" in drawn
+
+
+def test_a_fix_that_starts_at_the_left_margin_is_not_cut_in_half():
+    # A constant four-space gutter would strike from inside the first word.
+    drawn = page.diff("import sys\nx = 1\n", "import sys\nx = 2\n")
+    assert "-<s>x = 1</s>" in drawn
+
+
+def test_the_page_escapes_what_the_reference_leaves_raw():
+    """One deliberate divergence from the reference, and the reason for it.
+
+    The reference prints `c <= a` raw inside its diff, which a browser may
+    read as the start of a tag; it escapes the same character in the command
+    just above. Every page here escapes it.
+    """
+    assert "if c <= a)" in REFERENCE_PAGE
+    drawn = page.diff("x = a < b\n", "x = a > b\n")
+    assert "&lt;" in drawn and "&gt;" in drawn
+    assert "a < b" not in drawn
+    for name in NAMES:
+        body = html(name)
+        assert not re.search(r"<[^a-zA-Z/!]", body.replace("\n", " "))

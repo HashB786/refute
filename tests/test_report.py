@@ -452,10 +452,22 @@ def test_removed_lines_are_struck_and_added_lines_are_not():
     assert "<s>" not in html.split('<span class="add">')[1]
 
 
-def test_leading_whitespace_stays_outside_the_strike():
-    # A line drawn through an indent reads as a line through nothing.
+def test_the_strike_starts_at_one_column_for_the_whole_block():
+    # The indentation a block shares sits outside the strike, so the struck
+    # lines keep one straight left edge. tests/test_design.py checks the same
+    # rule against the reference's own figure.
     html = page.diff("    a = 1\n", "    a = 2\n")
     assert "-    <s>a = 1</s>" in html
+    deeper = page.diff("  a = 1\n      b = 2\n", "  a = 9\n")
+    assert "-  <s>a = 1</s>" in deeper
+    assert "-  <s>    b = 2</s>" in deeper
+
+
+def test_common_indent_is_what_every_line_of_a_block_begins_with():
+    assert page.common_indent(["    x", "        y"]) == "    "
+    assert page.common_indent(["x", "    y"]) == ""
+    assert page.common_indent(["", "   "]) == ""
+    assert page.common_indent([]) == ""
 
 
 def test_the_diff_escapes_the_code_it_shows():
