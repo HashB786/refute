@@ -317,8 +317,20 @@ class Client:
         self._transport = transport
         self._send_reasoning = bool(settings.reasoning_effort)
         self.calls = 0
+        self.cached = 0
         self.tokens = 0
         self.last_headers: dict[str, str] = {}
+        self._answered_by = ""
+
+    @property
+    def model(self) -> str:
+        """The model that answered, for the report footer.
+
+        A replayed run names the model that produced the recording, not
+        whatever REFUTE_MODEL happens to be set to on the machine replaying
+        it, since that model did no work.
+        """
+        return self._answered_by or self.settings.model
 
     # -- plumbing ----------------------------------------------------------
 
@@ -443,6 +455,8 @@ class Client:
         if use_cache or self.offline:
             cached = self.cache.get(purpose, prompt)
             if cached is not None:
+                self.cached += 1
+                self._answered_by = cached.model or self._answered_by
                 return cached
         if self.offline:
             raise CacheMiss(
@@ -462,6 +476,7 @@ class Client:
             )
 
         response = self._request(purpose, prompt, system)
+        self._answered_by = response.model or self._answered_by
         if use_cache:
             self.cache.put(purpose, prompt, response)
         return response
@@ -567,6 +582,7 @@ class FakeLLM:
         self.model = model
         self.prompts: list[tuple[str, str]] = []
         self.calls = 0
+        self.cached = 0
         self.tokens = 0
 
     def set(self, purpose: str, answer: object) -> None:

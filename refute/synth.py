@@ -58,6 +58,8 @@ class Calibration:
 
     mutations: int = 0
     rejected: int = 0
+    samples: int = 0
+    samples_rejecting: int = 0
     weak: bool = False
 
     @property
@@ -419,6 +421,8 @@ def validator_check(
                 blind.append(sample.name)
         calibration.mutations = tried
         calibration.rejected = rejected
+        calibration.samples = len(samples)
+        calibration.samples_rejecting = len(samples) - len(blind)
         if blind:
             return (
                 "it accepted every broken copy of example "

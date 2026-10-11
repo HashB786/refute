@@ -208,15 +208,21 @@ class StressOutcome:
         return max((record.size for record in self.tests), default=0)
 
 
-def _plan(pass_number: int, first_index: int) -> list[tuple[int, int, Mode, int]]:
-    """One pass: every size and mode, with eight seeds nobody has used yet."""
+def _plan(
+    pass_number: int, first_index: int, salt: int = 0
+) -> list[tuple[int, int, Mode, int]]:
+    """One pass: every size and mode, with eight seeds nobody has used yet.
+
+    The salt shifts the whole sequence. Checking a suggested fix passes one,
+    so that it is tested on inputs the first run never saw.
+    """
     items: list[tuple[int, int, Mode, int]] = []
     index = first_index
     for size in SIZES:
         for mode in MODES:
             for offset in range(SEEDS_PER_PASS):
                 index += 1
-                seed = pass_number * 1_000_003 + index * 97 + offset
+                seed = salt + pass_number * 1_000_003 + index * 97 + offset
                 items.append((index, size, mode, seed))
     return items
 
@@ -263,6 +269,7 @@ def run_stress(
     tools: Tools,
     budget: Budget | None = None,
     on_progress: Callable[[StressOutcome], None] | None = None,
+    seed_salt: int = 0,
 ) -> StressOutcome:
     """Test until the first confirmed failure, or until the budget runs out."""
     budget = budget or Budget()
@@ -280,7 +287,7 @@ def run_stress(
             if time.monotonic() - started >= budget.max_seconds:
                 break
             pass_number += 1
-            items = _plan(pass_number, len(outcome.tests))
+            items = _plan(pass_number, len(outcome.tests), seed_salt)
             room = budget.max_tests - len(outcome.tests)
             items = items[:room]
 

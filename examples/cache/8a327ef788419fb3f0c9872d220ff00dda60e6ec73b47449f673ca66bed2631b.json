@@ -1,0 +1,12 @@
+{
+  "finish_reason": "stop",
+  "model": "openai/gpt-oss-120b",
+  "provider": "openai",
+  "purpose": "oracle_b",
+  "response": "```python\nimport sys\n\ndef solve() -> None:\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    it = iter(data)\n    n = int(next(it))\n    a = int(next(it))\n    coins = [int(next(it)) for _ in range(n)]\n\n    # DP: dp[x] = min coins to make x\n    INF = 10**9\n    dp = [INF] * (a + 1)\n    dp[0] = 0\n    for coin in coins:\n        for x in range(coin, a + 1):\n            if dp[x - coin] + 1 < dp[x]:\n                dp[x] = dp[x - coin] + 1\n\n    print(dp[a])\n\nif __name__ == \"__main__\":\n    solve()\n```",
+  "usage": {
+    "completion_tokens": 208,
+    "estimated": false,
+    "prompt_tokens": 655
+  }
+}

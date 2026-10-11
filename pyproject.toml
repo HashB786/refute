@@ -25,3 +25,5 @@ packages = ["refute"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# TestRecord is a dataclass, not a test class.
+python_classes = []

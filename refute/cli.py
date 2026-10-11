@@ -21,18 +21,27 @@ from rich.console import Console
 from rich.text import Text
 
 from . import __version__, sandbox
+from .fix import explain as explain_failure
 from .llm import CacheMiss, Client, LLMError, Settings, build_client
-from .models import Budget, Counterexample, Limits, Verdict, out_paths
+from .models import Budget, Counterexample, Limits, Report, Trust, Verdict, out_paths
+from .report import differing
+from .report import finding as page_finding
+from .report import write as write_report
 from .shrink import ShrinkOutcome, shrink
-from .stress import StressOutcome, Tools, run_stress, tokens_equal
+from .stress import StressOutcome, Tools, run_stress
 from .synth import SynthError, Tooling, load_samples, synthesize
+
+#: The recorded example `refute demo` replays. Resolved against the package,
+#: not the working directory, so the demo works from anywhere in the repo.
+EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
+DEMO_PROBLEM = EXAMPLES / "coin-change"
+DEMO_CACHE = EXAMPLES / "cache"
 
 PING_PROMPT = "Reply with exactly: refute ping ok"
 LABEL = 10
 HERO_LABEL = 8
 WIDTH = 80
 MAX_HERO_LINES = 8
-SHORT_VALUE = 24
 
 BLUE = "blue"
 RED = "red"
@@ -93,19 +102,6 @@ def plural(count: int, word: str) -> str:
     return str(count) + " " + word + ("" if count == 1 else "s")
 
 
-def differing(got: str, want: str, float_tol: float | None) -> set[int]:
-    """Indices of the tokens in `got` that do not match `want`."""
-    left = got.split()
-    right = want.split()
-    out: set[int] = set()
-    for index, token in enumerate(left):
-        if index >= len(right):
-            out.add(index)
-        elif not tokens_equal(token, right[index], float_tol):
-            out.add(index)
-    return out
-
-
 def program_text(body: str, marked: set[int] | None = None) -> list[Text]:
     """Program output as lines, blue, with differing tokens in red parentheses.
 
@@ -136,29 +132,13 @@ def capped(lines: list[Text]) -> list[Text]:
     return lines[: MAX_HERO_LINES - 1] + [Text("...", style=DIM)]
 
 
-def is_short(value: str) -> bool:
-    flat = value.strip()
-    return bool(flat) and "\n" not in flat and len(flat) <= SHORT_VALUE
-
-
 def finding(name: str, found: Counterexample, limits: Limits) -> str:
-    """The one sentence that says what was proved, as DESIGN.md words it."""
-    verdict = found.verdict
-    if verdict == Verdict.RE.value:
-        return "Refuted. " + name + " crashes on this input."
-    if verdict == Verdict.TLE.value:
-        return (
-            "Refuted. "
-            + name
-            + " takes longer than "
-            + format(limits.target, "g")
-            + " s on this input."
-        )
-    got = found.actual.strip()
-    want = found.expected.strip()
-    if is_short(got) and is_short(want):
-        return "Refuted. " + name + " prints " + got + ". The right answer is " + want + "."
-    return "Refuted. " + name + " gives a wrong answer on this input."
+    """The console's finding: the page's sentence with "Refuted." in front.
+
+    The page opens with the finding itself, as DESIGN.md asks. The console
+    says plainly that something was refuted before saying what.
+    """
+    return "Refuted. " + page_finding(name, found, limits.target)
 
 
 # ---------------------------------------------------------------------------
@@ -273,6 +253,86 @@ def write_outputs(
     return paths
 
 
+def short_path(path: Path) -> str:
+    """A path relative to where the command was run, when it is under it.
+
+    `refute demo` resolves the example against the package, so without this
+    the command to repeat the failure is an absolute path that wraps over
+    three lines of an eighty column terminal.
+    """
+    try:
+        return path.resolve().relative_to(Path.cwd()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def run_command(solution: Path, paths: dict[str, Path]) -> str:
+    """The command that repeats the failure, in the form the report shows it."""
+    head = "python " if solution.suffix == ".py" else ""
+    return head + short_path(solution) + " < " + short_path(paths["counterexample"])
+
+
+def build_report(
+    problem: str,
+    solution: Path,
+    outcome: StressOutcome,
+    shrunk: ShrinkOutcome | None,
+    tooling: Tooling,
+    told,
+    client,
+    limits: Limits,
+    command: str,
+    offline: bool,
+    wall_started: float,
+    elapsed: float,
+) -> Report:
+    """Gather the whole run into the record that report.py renders."""
+    found = shrunk.counterexample if shrunk is not None else outcome.failure
+    calibration = tooling.calibration
+    trust = Trust(
+        tests_run=len(outcome.tests),
+        largest_size=outcome.largest_size,
+        largest_tokens=outcome.largest_tokens,
+        oracle_checks=outcome.oracle_checks,
+        oracle_agreements=outcome.oracle_agreements,
+        validator_rejections=calibration.rejected,
+        validator_mutations=calibration.mutations,
+        weak_validator=calibration.weak,
+        samples=len(tooling.samples),
+        samples_calibrated=calibration.samples_rejecting,
+        smoke_runs=tooling.smoke.runs,
+        smoke_accepted=tooling.smoke.accepted,
+        trusted_oracle=tooling.trusted_oracle,
+        skipped=dict(outcome.skipped),
+        model=getattr(client, "model", ""),
+        model_calls=client.calls + client.cached,
+        model_cached=client.cached,
+        model_tokens=client.tokens,
+    )
+    return Report(
+        problem=problem,
+        target=solution.name,
+        refuted=found is not None,
+        counterexample=found,
+        tests=outcome.tests,
+        shrink_steps=shrunk.steps if shrunk is not None else [],
+        trust=trust,
+        diagnosis=told.diagnosis if told is not None else "",
+        fix_source=told.source if told is not None else "",
+        fix_verified=told.verified if told is not None else False,
+        fix_reason=told.reason if told is not None else "",
+        target_source=solution.read_text(encoding="utf-8"),
+        command=command,
+        stable=shrunk.stable if shrunk is not None else True,
+        target_timeout=limits.target,
+        version=__version__,
+        offline=offline,
+        started_at=wall_started,
+        elapsed=elapsed,
+        notes=list(tooling.notes),
+    )
+
+
 def report_refuted(
     console: Console,
     solution: Path,
@@ -308,14 +368,9 @@ def report_refuted(
             hero_row(console, "got" if index == 0 else "", line)
 
     console.print("")
-    command = (
-        "python " + str(solution) + " < " + str(paths["counterexample"])
-        if solution.suffix == ".py"
-        else str(solution) + " < " + str(paths["counterexample"])
-    )
-    hero_row(console, "run it", Text(command))
+    hero_row(console, "run it", Text(run_command(solution, paths)))
     if paths["report_html"].is_file():
-        hero_row(console, "report", Text(str(paths["report_html"])))
+        hero_row(console, "report", Text(paths["report_html"].as_posix()))
 
 
 def report_not_refuted(console: Console, outcome: StressOutcome) -> None:
@@ -366,6 +421,7 @@ def run(args: argparse.Namespace, console: Console) -> int:
 
     status = Status(console)
     started = time.monotonic()
+    wall_started = time.time()
     with sandbox.workspace("refute-run-") as workdir:
         try:
             tooling = synthesize(
@@ -448,11 +504,56 @@ def run(args: argparse.Namespace, console: Console) -> int:
                     style=RED,
                 )
 
-        if not args.no_ai_explain:
-            row(console, "explain", "the model's diagnosis is not built yet", style=DIM)
-
         found = shrunk.counterexample if shrunk is not None else outcome.failure
+
+        told = None
+        if found is not None and not args.no_ai_explain:
+            status.update("explain", "asking the model what went wrong")
+            trouble = ""
+            try:
+                told = explain_failure(
+                    client,
+                    statement,
+                    solution,
+                    found,
+                    tools,
+                    tooling.samples,
+                    limits,
+                    budget,
+                )
+            except CacheMiss:
+                # The prompts carry the counterexample, so a recorded run only
+                # has an answer for the input it recorded. Shrinking is time
+                # boxed and can land somewhere else on a slower machine.
+                trouble = "no recorded answer for this counterexample"
+            except (SynthError, LLMError) as exc:
+                trouble = str(exc)
+            status.clear()
+            if trouble:
+                row(console, "explain", trouble, style=DIM)
+            elif told.verified:
+                row(console, "explain", "diagnosis written, fix verified")
+            elif told.source:
+                row(console, "explain", "diagnosis written, fix unverified: " + told.reason)
+            else:
+                row(console, "explain", "diagnosis written, no usable fix")
+
         paths = write_outputs(out_dir, found, shrunk)
+        paper = build_report(
+            problem=problem,
+            solution=solution,
+            outcome=outcome,
+            shrunk=shrunk,
+            tooling=tooling,
+            told=told,
+            client=client,
+            limits=limits,
+            command=run_command(solution, paths),
+            offline=args.offline,
+            wall_started=wall_started,
+            elapsed=time.monotonic() - started,
+        )
+        write_report(out_dir, paper, args.float_tol)
 
         if found is not None:
             report_refuted(console, solution, found, limits, args.float_tol, paths)
@@ -476,6 +577,42 @@ def run(args: argparse.Namespace, console: Console) -> int:
 
 # ---------------------------------------------------------------------------
 # parser
+
+
+def demo(console: Console) -> int:
+    """Replay the recorded example with no network and no key.
+
+    The model output is read back from examples/cache. Everything else is
+    done again for real: the references, the validator, the generator and
+    the target are all run as subprocesses here and now.
+    """
+    if not (DEMO_PROBLEM / "statement.md").is_file():
+        row(console, "demo", "the example is missing from " + DEMO_PROBLEM.as_posix())
+        return 1
+    if not DEMO_CACHE.is_dir():
+        row(console, "demo", "no recorded model output in " + DEMO_CACHE.as_posix())
+        return 1
+    row(
+        console,
+        "demo",
+        "replaying recorded model output; every program here is really run",
+        style=DIM,
+    )
+    console.print("")
+    return run(
+        argparse.Namespace(
+            statement=DEMO_PROBLEM / "statement.md",
+            solution=DEMO_PROBLEM / "greedy.py",
+            oracle=None,
+            samples=DEMO_PROBLEM / "samples",
+            float_tol=None,
+            no_ai_explain=False,
+            budget=None,
+            cache_dir=DEMO_CACHE,
+            offline=True,
+        ),
+        console,
+    )
 
 
 def settings_line(settings: Settings) -> str:
@@ -545,7 +682,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "run":
         return run(args, console)
 
-    if args.command in ("demo", "bench"):
+    if args.command == "demo":
+        return demo(console)
+
+    if args.command == "bench":
         row(console, args.command, "this command arrives in a later phase")
         return 1
 

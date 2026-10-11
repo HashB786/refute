@@ -141,8 +141,8 @@ def test_run_refutes_the_greedy_example(in_tmp, fake_model, capsys):
     assert "  run it    " in out
     assert " -> " in out  # the shrink line
 
-    # No report line yet: report.html is built in the next phase.
-    assert "report.html" not in out
+    assert "  report    " in out
+    assert "report.html" in out
     # Plain ASCII only, and inside eighty columns.
     assert out.isascii()
     assert max(len(line) for line in lines) <= 80
@@ -218,8 +218,55 @@ def test_run_says_which_file_is_missing(in_tmp, capsys):
     assert "there is no file at nope.md" in capsys.readouterr().out
 
 
-def test_run_mentions_that_the_diagnosis_is_not_built_yet(in_tmp, fake_model, capsys):
-    main(
+def test_run_writes_the_report_page_and_the_json(in_tmp, fake_model):
+    import json
+
+    code = main(
+        [
+            "run",
+            str(EXAMPLE / "statement.md"),
+            str(EXAMPLE / "greedy.py"),
+            "--samples",
+            str(EXAMPLE / "samples"),
+            "--no-ai-explain",
+            "--budget",
+            "250",
+        ]
+    )
+    assert code == 0
+    out_dir = in_tmp / "refute-out"
+    html = (out_dir / "report.html").read_text(encoding="utf-8")
+    counterexample = (out_dir / "counterexample.in").read_text(encoding="utf-8")
+
+    assert html.startswith("<!doctype html>")
+    assert html.count("<h1>") == 1
+    assert "<title>Refute: greedy.py</title>" in html
+    # The page shows the input that was really found, and the real test count.
+    for line in counterexample.splitlines():
+        assert '<div class="line">' + line + "</div>" in html
+    assert 'class="strip"' in html
+    assert 'class="facts"' in html
+    # No model sections, because --no-ai-explain was given.
+    assert "What the model said" not in html
+    assert "A suggested fix" not in html
+
+    data = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
+    assert data["refuted"] is True
+    assert data["counterexample"]["input_text"] == counterexample
+    assert data["trust"]["samples"] == 2
+    assert data["trust"]["smoke_runs"] == 75
+    assert data["trust"]["tests_run"] == len(data["tests"])
+    assert data["version"] == "0.1.0"
+    assert str(data["trust"]["tests_run"]) + " tests" in html
+
+
+def test_run_explains_and_verifies_a_fix(in_tmp, monkeypatch, capsys):
+    model = canned()
+    model.set("diagnose", "It always takes the largest coin that fits.")
+    model.set("fix", fenced(COIN_ORACLE))
+    monkeypatch.setattr("refute.cli.build_client", lambda **kwargs: model)
+
+    code = main(
         [
             "run",
             str(EXAMPLE / "statement.md"),
@@ -230,7 +277,39 @@ def test_run_mentions_that_the_diagnosis_is_not_built_yet(in_tmp, fake_model, ca
             "250",
         ]
     )
-    assert "diagnosis is not built yet" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "explain    diagnosis written, fix verified" in out
+
+    html = (in_tmp / "refute-out" / "report.html").read_text(encoding="utf-8")
+    assert "<h2>What the model said</h2>" in html
+    assert "Written by the model. Refute has not checked it." in html
+    assert "It always takes the largest coin that fits." in html
+    assert "<h2>A suggested fix</h2>" in html
+    assert "Verified: it passes the 2 samples" in html
+    assert 'class="diff"' in html
+
+
+def test_run_carries_on_when_the_model_has_nothing_to_say(in_tmp, fake_model, capsys):
+    # The canned model answers the tooling purposes but not diagnose, so the
+    # explanation is skipped and the rest of the report still gets written.
+    code = main(
+        [
+            "run",
+            str(EXAMPLE / "statement.md"),
+            str(EXAMPLE / "greedy.py"),
+            "--samples",
+            str(EXAMPLE / "samples"),
+            "--budget",
+            "250",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "explain" in out
+    html = (in_tmp / "refute-out" / "report.html").read_text(encoding="utf-8")
+    assert "What the model said" not in html
+    assert 'class="sheet hero"' in html
 
 
 def test_a_correct_target_is_not_refuted(in_tmp, fake_model, capsys):

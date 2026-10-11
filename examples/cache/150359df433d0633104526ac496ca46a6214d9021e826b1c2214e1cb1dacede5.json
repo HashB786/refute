@@ -1,0 +1,12 @@
+{
+  "finish_reason": "stop",
+  "model": "openai/gpt-oss-120b",
+  "provider": "openai",
+  "purpose": "validator",
+  "response": "```python\nimport sys\n\ndef fail():\n    sys.exit(1)\n\ndef main():\n    data = sys.stdin.read().strip().split()\n    # need at least 2 tokens for n and a\n    if len(data) < 2:\n        fail()\n    # first two tokens must be integers\n    try:\n        n = int(data[0])\n        a = int(data[1])\n    except:\n        fail()\n    # check ranges for n and a\n    if not (1 <= n <= 12):\n        fail()\n    if not (1 <= a <= 200):\n        fail()\n    # there must be exactly n more tokens\n    if len(data) != 2 + n:\n        fail()\n    # parse coin values\n    coins = []\n    try:\n        for i in range(n):\n            coins.append(int(data[2 + i]))\n    except:\n        fail()\n    # check each coin in range and first is 1\n    if coins[0] != 1:\n        fail()\n    if not (1 <= coins[0] <= 200):\n        fail()\n    for i in range(1, n):\n        if not (1 <= coins[i] <= 200):\n            fail()\n        if not (coins[i] > coins[i-1]):\n            fail()\n    # all checks passed\n    sys.exit(0)\n\nif __name__ == \"__main__\":\n    main()\n```",
+  "usage": {
+    "completion_tokens": 311,
+    "estimated": false,
+    "prompt_tokens": 649
+  }
+}

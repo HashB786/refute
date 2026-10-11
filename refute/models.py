@@ -166,13 +166,21 @@ class Trust:
 
     tests_run: int = 0
     largest_size: int = 0
+    largest_tokens: int = 0
     oracle_checks: int = 0
     oracle_agreements: int = 0
     validator_rejections: int = 0
     validator_mutations: int = 0
     weak_validator: bool = False
+    samples: int = 0
+    samples_calibrated: int = 0
+    smoke_runs: int = 0
+    smoke_accepted: int = 0
+    trusted_oracle: bool = False
     skipped: dict[str, int] = field(default_factory=dict)
+    model: str = ""
     model_calls: int = 0
+    model_cached: int = 0
     model_tokens: int = 0
 
     @property
@@ -196,6 +204,12 @@ class Report:
     diagnosis: str = ""
     fix_source: str = ""
     fix_verified: bool = False
+    fix_reason: str = ""
+    target_source: str = ""
+    command: str = ""
+    stable: bool = True
+    target_timeout: float = 2.0
+    version: str = ""
     offline: bool = False
     started_at: float = field(default_factory=time.time)
     elapsed: float = 0.0
